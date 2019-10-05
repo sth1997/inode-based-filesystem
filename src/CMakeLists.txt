@@ -1,0 +1,4 @@
+SET(SOURCE_FILES
+mytest.cpp)
+
+ADD_LIBRARY(mytestlib SHARED ${SOURCE_FILES})

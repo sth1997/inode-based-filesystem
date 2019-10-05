@@ -1,0 +1,1 @@
+/usr/bin/clang++  -O3 -Wall -dynamiclib -Wl,-headerpad_max_install_names  -o ../libs/libmytestlib.dylib -install_name @rpath/libmytestlib.dylib CMakeFiles/mytestlib.dir/mytest.cpp.o 

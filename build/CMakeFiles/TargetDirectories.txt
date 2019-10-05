@@ -1,0 +1,8 @@
+/Users/sth/git/inode-based-filesystem/build/CMakeFiles/rebuild_cache.dir
+/Users/sth/git/inode-based-filesystem/build/CMakeFiles/edit_cache.dir
+/Users/sth/git/inode-based-filesystem/build/src/CMakeFiles/rebuild_cache.dir
+/Users/sth/git/inode-based-filesystem/build/src/CMakeFiles/edit_cache.dir
+/Users/sth/git/inode-based-filesystem/build/src/CMakeFiles/mytestlib.dir
+/Users/sth/git/inode-based-filesystem/build/test/CMakeFiles/rebuild_cache.dir
+/Users/sth/git/inode-based-filesystem/build/test/CMakeFiles/edit_cache.dir
+/Users/sth/git/inode-based-filesystem/build/test/CMakeFiles/mytest_test.dir
