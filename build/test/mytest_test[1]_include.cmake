@@ -1,5 +1,0 @@
-if(EXISTS "/Users/sth/git/inode-based-filesystem/build/test/mytest_test[1]_tests.cmake")
-  include("/Users/sth/git/inode-based-filesystem/build/test/mytest_test[1]_tests.cmake")
-else()
-  add_test(mytest_test_NOT_BUILT mytest_test_NOT_BUILT)
-endif()

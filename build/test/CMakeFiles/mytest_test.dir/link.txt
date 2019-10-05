@@ -1,1 +1,0 @@
-/usr/bin/clang++   -O3 -Wall -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/mytest_test.dir/mytest_test.cpp.o  -o ../bin/mytest_test -Wl,-rpath,/Users/sth/git/inode-based-filesystem/build/libs /usr/local/lib/libgtest.a /usr/local/lib/libgtest_main.a -lpthread ../libs/libmytestlib.dylib 
