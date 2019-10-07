@@ -24,8 +24,6 @@ Block::Block(int _blockNum, bool _newBlock)
     else
     {
         setChanged();
-        system("rm -rf /tmp/fsdata/");
-        system("mkdir -p /tmp/fsdata/");
     }
     
 }

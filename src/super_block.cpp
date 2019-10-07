@@ -1,5 +1,6 @@
 #include "../include/super_block.h"
 #include "../include/const.h"
+#include <cstdlib>
 
 SuperBlock::SuperBlock(bool create):
 Block(0, create), maxDataBlockNumbers((int*) &data[0]), inodeNumbers((int*) &data[4]),
@@ -18,11 +19,13 @@ nextFreeInodeBlockNumber((int*) &data[40]), nextFreeDataBlockNumber((int*) &data
         *dataBitmapBeginBlock = 2;
         *dataBitmapEndBlock = *dataBitmapBeginBlock + MAX_DATA_BLOCK_NUMBERS / 8 / BLOCK_SIZE;
         *inodeBeginBlock = *dataBitmapEndBlock;
-        *inodeEndBlock = *inodeBeginBlock + MAX_INODE_NUMBERS;
+        *inodeEndBlock = *inodeBeginBlock + MAX_INODE_NUMBERS; // one inode use one block
         *dataBeginBlock = *inodeEndBlock;
         *dataEndBlock = *dataBeginBlock + MAX_DATA_BLOCK_NUMBERS;
         *nextFreeInodeBlockNumber = *inodeBeginBlock;
         *nextFreeDataBlockNumber = *dataBeginBlock;
         setChanged();
+        system("rm -rf /tmp/fsdata/");
+        system("mkdir -p /tmp/fsdata/");
     }
 }

@@ -13,4 +13,5 @@ TEST(super_block_test, create)
     ASSERT_EQ(*b2->maxDataBlockNumbers, MAX_DATA_BLOCK_NUMBERS);
     ASSERT_EQ(*b2->inodeBitmapBeginBlock, 1);
     ASSERT_EQ(*b2->dataBitmapBeginBlock, 2);
+    delete b2;
 }
