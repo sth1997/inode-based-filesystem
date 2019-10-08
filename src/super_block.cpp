@@ -8,12 +8,13 @@ inodeBitmapBeginBlock((int*) &data[8]), inodeBitmapEndBlock((int*) &data[12]),
 dataBitmapBeginBlock((int*) &data[16]), dataBitmapEndBlock((int*) &data[20]),
 inodeBeginBlock((int*) &data[24]), inodeEndBlock((int*) &data[28]),
 dataBeginBlock((int*) &data[32]), dataEndBlock((int*) &data[36]),
-nextFreeInodeBlockNumber((int*) &data[40]), nextFreeDataBlockNumber((int*) &data[44])
+nextFreeInodeBitmapByte((int*) &data[40]), nextFreeDataBitmapByte((int*) &data[44]),
+nextFreeDataBitmapBlock((int*) &data[48])
 {
     if (create)
     {
         *maxDataBlockNumbers = MAX_DATA_BLOCK_NUMBERS;
-        *inodeNumbers = MAX_INODE_NUMBERS;
+        *inodeNumbers = 0;
         *inodeBitmapBeginBlock = 1; // [1, 2)
         *inodeBitmapEndBlock = 2;
         *dataBitmapBeginBlock = 2;
@@ -22,10 +23,12 @@ nextFreeInodeBlockNumber((int*) &data[40]), nextFreeDataBlockNumber((int*) &data
         *inodeEndBlock = *inodeBeginBlock + MAX_INODE_NUMBERS; // one inode use one block
         *dataBeginBlock = *inodeEndBlock;
         *dataEndBlock = *dataBeginBlock + MAX_DATA_BLOCK_NUMBERS;
-        *nextFreeInodeBlockNumber = *inodeBeginBlock;
-        *nextFreeDataBlockNumber = *dataBeginBlock;
+        *nextFreeInodeBitmapByte = 0;
+        *nextFreeDataBitmapByte = 0;
+        *nextFreeDataBitmapBlock = *dataBitmapBeginBlock;
         setChanged();
         system("rm -rf /tmp/fsdata/");
         system("mkdir -p /tmp/fsdata/");
     }
+    setChanged();
 }

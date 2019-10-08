@@ -1,6 +1,7 @@
 #ifndef BITMAP_H_
 #define BITMAP_H_
 #include "block.h"
+#include <cstdio>
 
 class Bitmap: public Block
 {
@@ -27,7 +28,6 @@ public:
     void setAll(bool free);
     void set(int _blockNumber, bool free);
     int getNextFree(int &startBlock, int &startByte);
-
 };
 
 #endif //BITMAP_H_

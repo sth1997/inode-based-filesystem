@@ -9,9 +9,9 @@ TEST(super_block_test, create)
     delete b1;
 
     SuperBlock* b2 = new SuperBlock(false);
-    ASSERT_FALSE(b2->getChanged());
     ASSERT_EQ(*b2->maxDataBlockNumbers, MAX_DATA_BLOCK_NUMBERS);
     ASSERT_EQ(*b2->inodeBitmapBeginBlock, 1);
     ASSERT_EQ(*b2->dataBitmapBeginBlock, 2);
+    ASSERT_EQ(*b2->nextFreeDataBitmapBlock, 2);
     delete b2;
 }

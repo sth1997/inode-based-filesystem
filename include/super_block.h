@@ -15,8 +15,9 @@ public:
     int* const inodeEndBlock;
     int* const dataBeginBlock;
     int* const dataEndBlock;
-    int* const nextFreeInodeBlockNumber;
-    int* const nextFreeDataBlockNumber;
+    int* const nextFreeInodeBitmapByte;
+    int* const nextFreeDataBitmapByte;
+    int* const nextFreeDataBitmapBlock;
     SuperBlock(bool create);
 };
 
