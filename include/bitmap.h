@@ -13,6 +13,8 @@ public:
     Bitmap(int _blockNumber, bool _create, int _baseBLockNumber, int _size = -1);
     void setFree(int _blockNumber);
     void setUsed(int _blockNumber);
+    bool isBlockNumberFree(int _blockNumber);
+    bool isInodeNumberFree(int _blockNumber);
     void setAll(bool free);
     int getNextFree(int &startByte) const;
 };

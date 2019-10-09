@@ -3,6 +3,7 @@
 #include "block.h"
 #include "super_block.h"
 #include "bitmap.h"
+#include <string>
 
 enum InodeType
 {
@@ -21,10 +22,10 @@ private:
     void deleteIndirectBlock(SuperBlock* superBLock, BitmapMultiBlocks* dataBitmap);
 public:
     int* const blockNumberList;
-    int* size;
-    int* type;
-    int* refcnt;
-    int* singleIndirectBlockNumber;
+    int* const size;
+    int* const type;
+    int* const refcnt;
+    int* const singleIndirectBlockNumber;
     const int maxDirectBlockNumber;
     Block* indirectBlock;
     Inode(int _blockNumber, bool _create, InodeType _type = file);
@@ -33,6 +34,15 @@ public:
     void append(char* buf, int len, SuperBlock* superBlock, BitmapMultiBlocks* dataBitmap);
     void truncate(int len, SuperBlock* superBlock, BitmapMultiBlocks* dataBitmap);
     static int newInodeBlockNum(SuperBlock* superBlock, Bitmap* inodeBitmap);
+    static Inode* inodeNumberToInode(int inodeNumber, SuperBlock* SuperBlock, Bitmap* inodeBitmap);
+    static Block* inodeNumberToBlock(int offset, int inodeNum, SuperBlock* superBlock, Bitmap* inodeBitmap);
+    int nameToInodeNumber(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap);
+    static int nameToInodeNumber(const std::string& fileName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap);
+    static int nameToInodeBlockNumber(const std::string& fileName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap);
+    int createInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap, const InodeType inodeType, int inodeNumber = -1);
+    static int createRootInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap);
+    static int pathToInodeNumber(const std::string& fileName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap);
+    static void link(const std::string& srcName, const std::string& dstName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap);
 };
 
 #endif //INODE_H_

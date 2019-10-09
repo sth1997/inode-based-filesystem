@@ -12,6 +12,7 @@ public:
     ~Block();
     void setChanged() {changed = true;}
     bool getChanged() {return changed;}
+    int getBlockNum() {return blockNum;}
 };
 
 #endif //BLOCK_H_

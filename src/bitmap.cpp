@@ -30,6 +30,21 @@ void Bitmap::set(int _blockNumber, bool free)
     setChanged();
 }
 
+bool Bitmap::isInodeNumberFree(int inodeNumber)
+{
+    int index = inodeNumber;
+    assert(index / 8 < sizeBytes);
+    assert(index >= 0);
+    int posInByte = index & 7;
+    return (data[index / 8] & (1 << posInByte)) != 0;
+}
+
+bool Bitmap::isBlockNumberFree(int _blockNumber)
+{
+    int index = _blockNumber - baseBlockNumber;
+    return isInodeNumberFree(index);
+}
+
 void Bitmap::setFree(int _blockNumber)
 {
     set(_blockNumber, true);
