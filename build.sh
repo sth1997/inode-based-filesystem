@@ -1,0 +1,1 @@
+g++ -Wall src/inode_fuse.cpp `pkg-config fuse --cflags --libs` -I./include -L./build/libs -lmytestlib -o ./build/bin/inode_fuse

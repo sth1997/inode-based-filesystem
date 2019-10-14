@@ -32,7 +32,7 @@ bool myStrcmp(const char* a, const char* b)
     return true;
 }
 
-int stringMatch(const std::string& fileName, Block* b, int size)
+int stringMatch(const std::string& fileName, Block* b, int size, int* offsetPtr)
 {
     if (size > BLOCK_SIZE)
         size = BLOCK_SIZE;
@@ -41,6 +41,8 @@ int stringMatch(const std::string& fileName, Block* b, int size)
     {
         if (myStrcmp(str_c, b->data + offset))
         {
+            if (offsetPtr != NULL)
+                *offsetPtr = offset;
             return *((int*)(b->data + offset + FILE_NAME_LEN));
         }
     }

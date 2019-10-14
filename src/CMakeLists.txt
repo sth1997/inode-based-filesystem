@@ -7,3 +7,4 @@ common.cpp
 bitmap.cpp)
 
 ADD_LIBRARY(mytestlib SHARED ${SOURCE_FILES})
+INSTALL(TARGETS mytestlib LIBRARY DESTINATION lib)

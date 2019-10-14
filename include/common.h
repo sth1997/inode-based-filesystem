@@ -10,5 +10,5 @@
 Block* blockNumberToBlock(int _number);
 void createSuperBlockAndBitmaps(SuperBlock*& superBlock, Bitmap*& inodeBitmap, BitmapMultiBlocks*& dataBitmap);
 void deleteSuperBlockAndBitmaps(SuperBlock*& superBlock, Bitmap*& inodeBitmap, BitmapMultiBlocks*& dataBitmap);
-int stringMatch(const std::string& fileName, Block* b, int size);
+int stringMatch(const std::string& fileName, Block* b, int size, int* offsetPtr = NULL);
 #endif //COMMON_H_

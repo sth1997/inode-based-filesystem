@@ -5,6 +5,8 @@
 #include "../include/common.h"
 #include "../include/inode.h"
 
+using std::string;
+
 TEST(inode_test, largeFile)
 {
     SuperBlock* superBlock;
@@ -79,7 +81,9 @@ TEST(inode_test, directory)
     ASSERT_EQ(Inode::nameToInodeBlockNumber("12345678dir2", rootBlockNum - *superBlock->inodeBeginBlock, superBlock, inodeBitmap), -1);
     ASSERT_EQ(Inode::nameToInodeBlockNumber("12345678dir2", dir1BlockNum - *superBlock->inodeBeginBlock, superBlock, inodeBitmap), 4 + *superBlock->inodeBeginBlock);
 
+    ASSERT_EQ(Inode::absolutePathToInodeNumber("/", superBlock, inodeBitmap), 0);
     ASSERT_EQ(Inode::pathToInodeNumber("12345678dir1/12345678dir2", 0, superBlock, inodeBitmap), dir2BlockNum - *superBlock->inodeBeginBlock);
+    ASSERT_EQ(Inode::absolutePathToInodeNumber("/12345678dir1/12345678dir2", superBlock, inodeBitmap), dir2BlockNum - *superBlock->inodeBeginBlock);
     ASSERT_EQ(Inode::pathToInodeNumber("12345678dir1/1234567data1", 0, superBlock, inodeBitmap), data1BlockNum - *superBlock->inodeBeginBlock);
     ASSERT_EQ(Inode::pathToInodeNumber("12345678dir0/12345678dir2", 0, superBlock, inodeBitmap), -1);
     Inode::link("12345678dir1/1234567data1", "12345678dir1/12345678dir2/1234567data2", 0, superBlock, inodeBitmap, dataBitmap);
@@ -89,5 +93,12 @@ TEST(inode_test, directory)
     ASSERT_EQ(*data2Inode->refcnt, 2);
     ASSERT_EQ(*data2Inode->type, file);
     delete data2Inode;
+    dir1Inode = new Inode(dir1BlockNum, false);
+    dir1Inode->deleteInode(string("1234567data1"), superBlock, inodeBitmap, dataBitmap);
+    ASSERT_EQ(dir1Inode->nameToInodeNumber("1234567data1", superBlock, inodeBitmap), -1);
+    delete dir1Inode;
+    ASSERT_EQ(Inode::pathToInodeNumber("1234567data1", dir1BlockNum - *superBlock->inodeBeginBlock, superBlock, inodeBitmap), -1);
+    data2Inode = Inode::inodeNumberToInode(data2InodeNumber, superBlock, inodeBitmap);
+    ASSERT_EQ(*data2Inode->refcnt, 1);
     deleteSuperBlockAndBitmaps(superBlock, inodeBitmap, dataBitmap);
 }

@@ -36,12 +36,14 @@ public:
     static int newInodeBlockNum(SuperBlock* superBlock, Bitmap* inodeBitmap);
     static Inode* inodeNumberToInode(int inodeNumber, SuperBlock* SuperBlock, Bitmap* inodeBitmap);
     static Block* inodeNumberToBlock(int offset, int inodeNum, SuperBlock* superBlock, Bitmap* inodeBitmap);
-    int nameToInodeNumber(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap);
+    int nameToInodeNumber(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, int* offsetPtr = NULL);
     static int nameToInodeNumber(const std::string& fileName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap);
     static int nameToInodeBlockNumber(const std::string& fileName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap);
     int createInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap, const InodeType inodeType, int inodeNumber = -1);
+    void deleteInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap);
     static int createRootInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap);
     static int pathToInodeNumber(const std::string& fileName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap);
+    static int absolutePathToInodeNumber(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap);
     static void link(const std::string& srcName, const std::string& dstName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap);
 };
 

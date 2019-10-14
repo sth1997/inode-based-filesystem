@@ -1,0 +1,362 @@
+/*
+  FUSE: Filesystem in Userspace
+  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+  Copyright (C) 2011       Sebastian Pipping <sebastian@pipping.org>
+
+  This program can be distributed under the terms of the GNU GPL.
+  See the file COPYING.
+
+  gcc -Wall fusexmp.c `pkg-config fuse --cflags --libs` -o fusexmp
+*/
+
+#define FUSE_USE_VERSION 26
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#ifdef linux
+/* For pread()/pwrite()/utimensat() */
+#define _XOPEN_SOURCE 700
+#endif
+
+#include <fuse.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <errno.h>
+#include <sys/time.h>
+#ifdef HAVE_SETXATTR
+#include <sys/xattr.h>
+#endif
+#include <string>
+#include "../include/inode.h"
+#include "../include/super_block.h"
+#include "../include/common.h"
+#include <assert.h>
+#include <fstream>
+using namespace std;
+
+static ofstream log;
+static Inode* cwdInode;
+static string cwdStr;
+static SuperBlock* superBlock;
+static Bitmap* inodeBitmap;
+static BitmapMultiBlocks* dataBitmap;
+static int rootInodeNumber;
+
+static void deletecwd()
+{
+    if (cwdInode != NULL)
+    {
+        delete cwdInode;
+        cwdInode = NULL;
+        cwdStr = "";
+    }
+}
+
+static string getFileNameFromPath(const string& pathStr)
+{
+    int pos = pathStr.rfind("/");
+    assert(pos != pathStr.npos);
+    return pathStr.substr(pos + 1);
+}
+
+/*
+static int inode_readlink(const char *path, char *buf, size_t size)
+{
+	int res;
+
+	res = readlink(path, buf, size - 1);
+	if (res == -1)
+		return -errno;
+
+	buf[res] = '\0';
+	return 0;
+}
+
+static int inode_symlink(const char *from, const char *to)
+{
+	int res;
+
+	res = symlink(from, to);
+	if (res == -1)
+		return -errno;
+
+	return 0;
+}
+
+static int inode_rename(const char *from, const char *to)
+{
+	int res;
+
+	res = rename(from, to);
+	if (res == -1)
+		return -errno;
+
+	return 0;
+}
+
+static int inode_link(const char *from, const char *to)
+{
+	int res;
+
+	res = link(from, to);
+	if (res == -1)
+		return -errno;
+
+	return 0;
+}
+
+static int inode_truncate(const char *path, off_t size)
+{
+	int res;
+
+	res = truncate(path, size);
+	if (res == -1)
+		return -errno;
+
+	return 0;
+}
+
+static int inode_open(const char *path, struct fuse_file_info *fi)
+{
+	int res;
+
+	res = open(path, fi->flags);
+	if (res == -1)
+		return -errno;
+
+	close(res);
+	return 0;
+}
+
+static int inode_read(const char *path, char *buf, size_t size, off_t offset,
+		    struct fuse_file_info *fi)
+{
+	int fd;
+	int res;
+
+	(void) fi;
+	fd = open(path, O_RDONLY);
+	if (fd == -1)
+		return -errno;
+
+	res = pread(fd, buf, size, offset);
+	if (res == -1)
+		res = -errno;
+
+	close(fd);
+	return res;
+}
+
+static int inode_write(const char *path, const char *buf, size_t size,
+		     off_t offset, struct fuse_file_info *fi)
+{
+	int fd;
+	int res;
+
+	(void) fi;
+	fd = open(path, O_WRONLY);
+	if (fd == -1)
+		return -errno;
+
+	res = pwrite(fd, buf, size, offset);
+	if (res == -1)
+		res = -errno;
+
+	close(fd);
+	return res;
+}*/
+
+/*static int inode_release(const char *path, struct fuse_file_info *fi)
+{
+	/* Just a stub.	 This method is optional and can safely be left
+	   unimplemented */
+
+	/*(void) path;
+	(void) fi;
+	return 0;
+}*/
+/*
+static int inode_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+
+}
+*/
+
+
+
+static int inode_opendir(const char* path, struct fuse_file_info *fi)
+{
+    log << "opendir " << path << endl;
+    log.flush();
+    if (string(path) == cwdStr)
+        return 0;
+    deletecwd();
+    cwdStr = string(path);
+    int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    log << "inodeNum = " << inodeNum << endl;
+    log.flush();
+    cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    assert(*cwdInode->type == directory);
+    log << "opendir successful" << endl;
+    log.flush();
+    return 0;
+}
+
+static int inode_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+		       off_t offset, struct fuse_file_info *fi)
+{
+    log << "readdir " << path << endl;
+    log.flush();
+    assert(string(path) == cwdStr);
+    struct stat st;
+    st.st_mode = S_IFDIR;
+    filler(buf, ".", &st, 0);
+    filler(buf, "..", &st, 0);
+    for (int offset = 0; offset < *cwdInode->size; offset += BLOCK_SIZE)
+    {
+        Block* b = cwdInode->inodeToBlock(offset);
+        int len = BLOCK_SIZE;
+        if (*cwdInode->size - offset < BLOCK_SIZE)
+            len = *cwdInode->size - offset;
+        log << "len = " << len << endl;
+        log.flush();
+        for (int i = 0; i < len; i += 16)
+        {
+            if (b->data[i] == '\0') // file has been deleted
+                continue;
+            char fileName[FILE_NAME_LEN + 1];
+            memcpy(fileName, b->data + i, FILE_NAME_LEN);
+            fileName[FILE_NAME_LEN] = '\0';
+            int blockNum = *((int*)(b->data + i + FILE_NAME_LEN));
+            log << "fileName = " << fileName << endl;
+            log.flush();
+            Inode* file = new Inode(blockNum, false);
+            // TODO : slink
+            if (*file->type == directory)
+                st.st_mode = S_IFDIR | 0666;
+            else
+                st.st_mode = S_IFREG | 0666;
+            delete file;
+            log << "st_mode = " << st.st_mode << endl;
+            log.flush();
+            filler(buf, fileName, &st, 0);
+        }
+        delete b;
+    }
+    log << "readdir successful" << endl;
+    log.flush();
+	return 0;
+}
+
+static int inode_mkdir(const char *path, mode_t mode)
+{
+    log << "mkdir " << path << endl;
+    log.flush();
+    string fileName = getFileNameFromPath(string(path));
+    log << "filename = " << fileName << endl;
+    log << "inode Block num = " << cwdInode->getBlockNum() << "   " << *superBlock->inodeBeginBlock << endl;
+    log.flush();
+	cwdInode->createInode(fileName, superBlock, inodeBitmap, dataBitmap, directory);
+    log << "mkdirdir successful" << endl;
+    log.flush();
+	return 0;
+}
+
+static int inode_rmdir(const char *path)
+{
+    log << "rmdir " << path << endl;
+    log.flush();
+    string fileName = getFileNameFromPath(string(path));
+    string pathStr = string(path);
+    int pos = pathStr.rfind("/");
+    string parentPath = pathStr.substr(0, pos);
+    if (pos == 0)
+        parentPath = "/";
+    log << "fileName = " << fileName << "parentPath = " << parentPath << endl;
+    log.flush();
+    deletecwd();
+    cwdStr = parentPath;
+    int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    cwdInode->deleteInode(fileName, superBlock, inodeBitmap, dataBitmap);
+	return 0;
+}
+
+static int inode_unlink(const char *path)
+{
+	string fileName = getFileNameFromPath(string(path));
+    cwdInode->deleteInode(fileName, superBlock, inodeBitmap, dataBitmap);
+	return 0;
+}
+
+static int inode_getattr(const char *path, struct stat *stbuf)
+{
+    Inode* inode = NULL;
+    memset(stbuf, 0, sizeof(struct stat));
+    if (string(path) != cwdStr)
+    {   
+        string fileName = getFileNameFromPath(string(path));
+        int inodeNum = cwdInode->nameToInodeNumber(fileName, superBlock, inodeBitmap);
+        if (inodeNum == -1)
+            return -ENOENT;
+        inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    }
+    else
+        inode = cwdInode;
+    stbuf->st_ino = inode->getBlockNum() - *superBlock->inodeBeginBlock;
+    // TODO : slink
+    if (*inode->type == directory)
+        stbuf->st_mode = S_IFDIR | 0666;
+    else
+        stbuf->st_mode = S_IFREG | 0666;
+    stbuf->st_nlink = *inode->refcnt;
+    stbuf->st_size = *inode->size;
+    stbuf->st_blocks = (*inode->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    stbuf->st_blksize = BLOCK_SIZE;
+
+    if (string(path) != cwdStr)
+        delete inode;
+
+	return 0;
+}
+
+static struct fuse_operations inode_oper; 
+
+int main(int argc, char *argv[])
+{
+	/*
+	inode_oper.readlink	= inode_readlink;
+	inode_oper.symlink	= inode_symlink;
+	inode_oper.rename		= inode_rename;
+	inode_oper.link		= inode_link;
+	inode_oper.truncate	= inode_truncate;
+	inode_oper.open		= inode_open;
+	inode_oper.read		= inode_read;
+	inode_oper.write		= inode_write;
+	inode_oper.release	= inode_release;
+    inode_oper.create     = inode_create;*/
+    inode_oper.getattr	= inode_getattr;
+    inode_oper.opendir = inode_opendir;
+    inode_oper.readdir = inode_readdir;
+    inode_oper.mkdir = inode_mkdir;
+	inode_oper.rmdir = inode_rmdir;
+    inode_oper.unlink = inode_unlink;
+
+    log.open("inode_fuse.log");
+
+    createSuperBlockAndBitmaps(superBlock, inodeBitmap, dataBitmap);
+    rootInodeNumber = Inode::createRootInode("/", superBlock, inodeBitmap, dataBitmap);
+    cwdStr = "/";
+    cwdInode = new Inode(rootInodeNumber, false);
+	umask(0);
+	int ret = fuse_main(argc, argv, &inode_oper, NULL);
+    deletecwd();
+    deleteSuperBlockAndBitmaps(superBlock, inodeBitmap, dataBitmap);
+    return ret;
+}

@@ -151,7 +151,6 @@ void Inode::deleteIndirectBlock(SuperBlock* superBLock, BitmapMultiBlocks* dataB
 
 void Inode::truncate(int len, SuperBlock* superBlock, BitmapMultiBlocks* dataBitmap)
 {
-    assert(*type == file);
     if (len == *size)
         return;
     if (len > *size)
@@ -215,15 +214,19 @@ Block* Inode::inodeNumberToBlock(int offset, int inodeNum, SuperBlock* superBloc
     return blockNumberToBlock(_blockNum);
 }
 
-int Inode::nameToInodeNumber(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap)
+int Inode::nameToInodeNumber(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, int* offsetPtr)
 {
     assert(*type == directory);
     for (int offset = 0; offset < *size; offset += BLOCK_SIZE)
     {
         Block* b = inodeToBlock(offset);
-        int inodeBlockNum = stringMatch(fileName, b, *size - offset);
+        int inodeBlockNum = stringMatch(fileName, b, *size - offset, offsetPtr);
         if (inodeBlockNum != -1)
+        {
+            if (offsetPtr != NULL)
+                *offsetPtr = *offsetPtr + offset;
             return inodeBlockNum - *superBlock->inodeBeginBlock;
+        }
         delete b;
     }
     return -1;
@@ -264,7 +267,30 @@ int Inode::createInode(const std::string& fileName, SuperBlock* superBlock, Bitm
         delete newInode;
     }
     delete[] buf;
+    setChanged();
     return inodeBlockNumber;
+}
+
+void Inode::deleteInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap)
+{
+    assert(*type == directory);
+    assert(fileName.length() == FILE_NAME_LEN);
+    int offset = -1;
+    int inodeNumber = nameToInodeNumber(fileName, superBlock, inodeBitmap, &offset);
+    Inode* inode = inodeNumberToInode(inodeNumber, superBlock, inodeBitmap);
+    inode->truncate(0, superBlock, dataBitmap);
+    (*inode->refcnt)--;
+    inode->setChanged();
+    Block* b = inodeToBlock(offset);
+    memset(b->data + (offset % BLOCK_SIZE), 0, 16);
+    b->setChanged();
+    delete b;
+    if (*inode->refcnt == 0)
+    {
+        (*superBlock->inodeNumbers)--;
+        inodeBitmap->set(inodeNumber + *superBlock->inodeBeginBlock, true);
+    }
+    delete inode;
 }
 
 int Inode::createRootInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap)
@@ -278,10 +304,11 @@ int Inode::createRootInode(const std::string& fileName, SuperBlock* superBlock, 
 
 int Inode::pathToInodeNumber(const std::string& fileName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap)
 {
-    //TODO : /xxxx or xxxx/
     std::string str = fileName;
     while (true)
     {
+        if (str == "/")
+            return dirInodeNumber;
         int pos = str.find("/");
         if (pos == str.npos)
             return nameToInodeNumber(str, dirInodeNumber, superBlock, inodeBitmap);
@@ -295,6 +322,15 @@ int Inode::pathToInodeNumber(const std::string& fileName, int dirInodeNumber, Su
         }
     }
 }
+
+int Inode::absolutePathToInodeNumber(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap)
+{
+    assert(fileName.substr(0,1) == "/");
+    if (fileName == "/")
+        return 0;
+    return pathToInodeNumber(fileName.substr(1), 0, superBlock, inodeBitmap);
+}
+
 
 void Inode::link(const std::string& srcName, const std::string& dstName, int dirInodeNumber, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap)
 {
