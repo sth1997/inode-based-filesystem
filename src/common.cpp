@@ -27,8 +27,12 @@ void deleteSuperBlockAndBitmaps(SuperBlock*& superBlock, Bitmap*& inodeBitmap, B
 bool myStrcmp(const char* a, const char* b)
 {
     for (int i = 0; i < FILE_NAME_LEN; ++i)
+    {       
         if (a[i] != b[i])
             return false;
+        if ((a[i] == '\0') || (b[i] == '\0'))
+            return true;
+    }
     return true;
 }
 

@@ -31,7 +31,7 @@ public:
     Inode(int _blockNumber, bool _create, InodeType _type = file);
     ~Inode();
     Block* inodeToBlock(int offset);
-    void append(char* buf, int len, SuperBlock* superBlock, BitmapMultiBlocks* dataBitmap);
+    void append(const char* buf, int len, SuperBlock* superBlock, BitmapMultiBlocks* dataBitmap);
     void truncate(int len, SuperBlock* superBlock, BitmapMultiBlocks* dataBitmap);
     static int newInodeBlockNum(SuperBlock* superBlock, Bitmap* inodeBitmap);
     static Inode* inodeNumberToInode(int inodeNumber, SuperBlock* SuperBlock, Bitmap* inodeBitmap);

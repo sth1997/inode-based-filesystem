@@ -105,7 +105,7 @@ void Inode::setBlockNumber(int offset, int _blockNum, SuperBlock* superBlock, Bi
     }
 }
 
-void Inode::append(char* buf, int len, SuperBlock* superBlock, BitmapMultiBlocks* dataBitmap)
+void Inode::append(const char* buf, int len, SuperBlock* superBlock, BitmapMultiBlocks* dataBitmap)
 {
     int restSize = (maxDirectBlockNumber + BLOCK_SIZE / 4) * BLOCK_SIZE - *size;
     assert(len <= restSize);
@@ -216,6 +216,9 @@ Block* Inode::inodeNumberToBlock(int offset, int inodeNum, SuperBlock* superBloc
 
 int Inode::nameToInodeNumber(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, int* offsetPtr)
 {
+    assert(fileName.length() > 0);
+    if (fileName.length() > FILE_NAME_LEN)
+        return -1; // must can not find
     assert(*type == directory);
     for (int offset = 0; offset < *size; offset += BLOCK_SIZE)
     {
@@ -251,14 +254,17 @@ int Inode::nameToInodeBlockNumber(const std::string& fileName, int dirInodeNumbe
 int Inode::createInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap, const InodeType inodeType, int inodeNumber)
 {
     assert(*type == directory);
-    assert(fileName.length() == FILE_NAME_LEN);
+    assert(fileName.length() > 0);
+    assert(fileName.length() <= FILE_NAME_LEN);
     int inodeBlockNumber;
     if (inodeNumber != -1) // link
         inodeBlockNumber = inodeNumber + *superBlock->inodeBeginBlock;
     else // new
         inodeBlockNumber = newInodeBlockNum(superBlock, inodeBitmap);
     char* buf = new char[FILE_NAME_LEN + 4];
-    memcpy(buf, fileName.c_str(), FILE_NAME_LEN);
+    memcpy(buf, fileName.c_str(), fileName.length());
+    if (fileName.length() < FILE_NAME_LEN)
+        buf[fileName.length()] = '\0';
     *((int*)(buf + FILE_NAME_LEN)) = inodeBlockNumber;
     append(buf, FILE_NAME_LEN + 4, superBlock, dataBitmap);
     if (inodeNumber == -1)
@@ -274,7 +280,8 @@ int Inode::createInode(const std::string& fileName, SuperBlock* superBlock, Bitm
 void Inode::deleteInode(const std::string& fileName, SuperBlock* superBlock, Bitmap* inodeBitmap, BitmapMultiBlocks* dataBitmap)
 {
     assert(*type == directory);
-    assert(fileName.length() == FILE_NAME_LEN);
+    assert(fileName.length() > 0);
+    assert(fileName.length() <= FILE_NAME_LEN);
     int offset = -1;
     int inodeNumber = nameToInodeNumber(fileName, superBlock, inodeBitmap, &offset);
     Inode* inode = inodeNumberToInode(inodeNumber, superBlock, inodeBitmap);

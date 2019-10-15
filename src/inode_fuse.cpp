@@ -106,84 +106,7 @@ static int inode_link(const char *from, const char *to)
 		return -errno;
 
 	return 0;
-}
-
-static int inode_truncate(const char *path, off_t size)
-{
-	int res;
-
-	res = truncate(path, size);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
-static int inode_open(const char *path, struct fuse_file_info *fi)
-{
-	int res;
-
-	res = open(path, fi->flags);
-	if (res == -1)
-		return -errno;
-
-	close(res);
-	return 0;
-}
-
-static int inode_read(const char *path, char *buf, size_t size, off_t offset,
-		    struct fuse_file_info *fi)
-{
-	int fd;
-	int res;
-
-	(void) fi;
-	fd = open(path, O_RDONLY);
-	if (fd == -1)
-		return -errno;
-
-	res = pread(fd, buf, size, offset);
-	if (res == -1)
-		res = -errno;
-
-	close(fd);
-	return res;
-}
-
-static int inode_write(const char *path, const char *buf, size_t size,
-		     off_t offset, struct fuse_file_info *fi)
-{
-	int fd;
-	int res;
-
-	(void) fi;
-	fd = open(path, O_WRONLY);
-	if (fd == -1)
-		return -errno;
-
-	res = pwrite(fd, buf, size, offset);
-	if (res == -1)
-		res = -errno;
-
-	close(fd);
-	return res;
 }*/
-
-/*static int inode_release(const char *path, struct fuse_file_info *fi)
-{
-	/* Just a stub.	 This method is optional and can safely be left
-	   unimplemented */
-
-	/*(void) path;
-	(void) fi;
-	return 0;
-}*/
-/*
-static int inode_create(const char *path, mode_t mode, struct fuse_file_info *fi)
-{
-
-}
-*/
 
 
 
@@ -298,6 +221,8 @@ static int inode_unlink(const char *path)
 
 static int inode_getattr(const char *path, struct stat *stbuf)
 {
+    log << "getattr " << path << endl;
+    log.flush();
     Inode* inode = NULL;
     memset(stbuf, 0, sizeof(struct stat));
     int inodeNum = Inode::absolutePathToInodeNumber(path, superBlock, inodeBitmap);
@@ -319,6 +244,148 @@ static int inode_getattr(const char *path, struct stat *stbuf)
 	return 0;
 }
 
+static int inode_release(const char *path, struct fuse_file_info *fi)
+{
+    // do nothing
+	return 0;
+}
+
+static int inode_open(const char *path, struct fuse_file_info *fi)
+{
+	// do nothing
+	return 0;
+}
+
+static int inode_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+    log << "create " << path << endl;
+    log.flush();
+	string fileName = getFileNameFromPath(string(path));
+    string cwdStr = getParentPath(string(path));
+    int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    Inode* cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    cwdInode->createInode(fileName, superBlock, inodeBitmap, dataBitmap, file);
+    delete cwdInode;
+    return 0;
+}
+
+static int inode_truncate(const char *path, off_t size)
+{
+	log << "truncate " << path << "  size = " << size << endl;
+    log.flush();
+    int inodeNum = Inode::absolutePathToInodeNumber(string(path), superBlock, inodeBitmap);
+    if (inodeNum == -1)
+    {
+        log << "File " << path << " not found." << endl;
+        log.flush();
+        return -ENOENT;
+    }
+    Inode* inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    if (*inode->type != file)
+    {
+        log << "truncate type != file" << endl;
+        log.flush();
+        assert(0);
+    }
+    inode->truncate(size, superBlock, dataBitmap);
+    delete inode;
+	return 0;
+}
+
+static int inode_read(const char *path, char *buf, size_t size, off_t offset,
+		    struct fuse_file_info *fi)
+{
+	log << "read " << path << "  size = " << size << "  offset = " << offset << endl;
+    log.flush();
+    int inodeNum = Inode::absolutePathToInodeNumber(string(path), superBlock, inodeBitmap);
+    if (inodeNum == -1)
+    {
+        log << "File " << path << " not found." << endl;
+        log.flush();
+        return -ENOENT;
+    }
+    Inode* inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    if (*inode->type != file)
+    {
+        log << "truncate type != file" << endl;
+        log.flush();
+        assert(0);
+    }
+    if (*inode->size <= offset)
+    {
+        delete inode;
+        return 0;
+    }
+
+    if (*inode->size - offset < size)
+        size = *inode->size - offset;
+    int restBlockSize = 0;
+    int readBytes = 0;
+    for (; (offset < *inode->size) && (size != 0); offset += restBlockSize, size -= restBlockSize, buf += restBlockSize, readBytes += restBlockSize)
+    {
+        Block* b = inode->inodeToBlock(offset);
+        restBlockSize = BLOCK_SIZE - offset % BLOCK_SIZE;
+        if (restBlockSize > size)
+            restBlockSize = size;
+        memcpy(buf, b->data + (offset % BLOCK_SIZE), restBlockSize);
+        delete b;
+    }
+	delete inode;
+    log << "Read " << readBytes << " bytes." << endl;
+    log.flush();
+    return readBytes;
+}
+
+static int inode_write(const char *path, const char *buf, size_t size,
+		     off_t offset, struct fuse_file_info *fi)
+{
+	log << "write " << path << "  size = " << size << "  offset = " << offset << endl;
+    log.flush();
+    int inodeNum = Inode::absolutePathToInodeNumber(string(path), superBlock, inodeBitmap);
+    if (inodeNum == -1)
+    {
+        log << "File " << path << " not found." << endl;
+        log.flush();
+        return -ENOENT;
+    }
+    Inode* inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    if (*inode->type != file)
+    {
+        log << "truncate type != file" << endl;
+        log.flush();
+        assert(0);
+    }
+    if (*inode->size < offset)
+    {
+        log << "Write offset > inode size" << endl;
+        log.flush();
+        assert(0);
+    }
+
+    int writeBytes = 0;
+    int restBlockSize = 0;
+    for (; (offset < *inode->size) && (size != 0); offset += restBlockSize, size -= restBlockSize, buf += restBlockSize, writeBytes += restBlockSize)
+    {
+        Block* b = inode->inodeToBlock(offset);
+        restBlockSize = BLOCK_SIZE - offset % BLOCK_SIZE;
+        if (restBlockSize > size)
+            restBlockSize = size;
+        if (restBlockSize > (*inode->size - offset))
+            restBlockSize = *inode->size - offset;
+        memcpy(b->data + (offset % BLOCK_SIZE), buf, restBlockSize);
+        delete b;
+    }
+    if (size != 0)
+    {
+        inode->append(buf, size, superBlock, dataBitmap);
+        writeBytes += size;
+    }
+	delete inode;
+    log << "Write " << writeBytes << " bytes." << endl;
+    log.flush();
+    return writeBytes;
+}
+
 static struct fuse_operations inode_oper; 
 
 int main(int argc, char *argv[])
@@ -327,19 +394,19 @@ int main(int argc, char *argv[])
 	inode_oper.readlink	= inode_readlink;
 	inode_oper.symlink	= inode_symlink;
 	inode_oper.rename		= inode_rename;
-	inode_oper.link		= inode_link;
-	inode_oper.truncate	= inode_truncate;
-	inode_oper.open		= inode_open;
-	inode_oper.read		= inode_read;
-	inode_oper.write		= inode_write;
-	inode_oper.release	= inode_release;
-    inode_oper.create     = inode_create;*/
+	inode_oper.link		= inode_link;*/
     inode_oper.getattr	= inode_getattr;
     inode_oper.opendir = inode_opendir;
     inode_oper.readdir = inode_readdir;
     inode_oper.mkdir = inode_mkdir;
 	inode_oper.rmdir = inode_rmdir;
     inode_oper.unlink = inode_unlink;
+    inode_oper.release = inode_release;
+    inode_oper.open = inode_open;
+    inode_oper.create = inode_create;
+    inode_oper.truncate = inode_truncate;
+    inode_oper.read = inode_read;
+    inode_oper.write = inode_write;
 
     log.open("inode_fuse.log");
 
