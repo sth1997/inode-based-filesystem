@@ -41,28 +41,25 @@
 using namespace std;
 
 static ofstream log;
-static Inode* cwdInode;
-static string cwdStr;
 static SuperBlock* superBlock;
 static Bitmap* inodeBitmap;
 static BitmapMultiBlocks* dataBitmap;
 static int rootInodeNumber;
-
-static void deletecwd()
-{
-    if (cwdInode != NULL)
-    {
-        delete cwdInode;
-        cwdInode = NULL;
-        cwdStr = "";
-    }
-}
 
 static string getFileNameFromPath(const string& pathStr)
 {
     int pos = pathStr.rfind("/");
     assert(pos != pathStr.npos);
     return pathStr.substr(pos + 1);
+}
+
+static string getParentPath(const string& pathStr)
+{
+    int pos = pathStr.rfind("/");
+    assert(pos != pathStr.npos);
+    if (pos == 0) // "/"
+        return string("/");
+    return pathStr.substr(0, pos);
 }
 
 /*
@@ -194,17 +191,15 @@ static int inode_opendir(const char* path, struct fuse_file_info *fi)
 {
     log << "opendir " << path << endl;
     log.flush();
-    if (string(path) == cwdStr)
-        return 0;
-    deletecwd();
-    cwdStr = string(path);
+    string cwdStr = string(path);
     int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
     log << "inodeNum = " << inodeNum << endl;
     log.flush();
-    cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    Inode* cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     assert(*cwdInode->type == directory);
     log << "opendir successful" << endl;
     log.flush();
+    delete cwdInode;
     return 0;
 }
 
@@ -213,11 +208,13 @@ static int inode_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 {
     log << "readdir " << path << endl;
     log.flush();
-    assert(string(path) == cwdStr);
     struct stat st;
     st.st_mode = S_IFDIR;
     filler(buf, ".", &st, 0);
     filler(buf, "..", &st, 0);
+    string cwdStr = string(path);
+    int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    Inode* cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     for (int offset = 0; offset < *cwdInode->size; offset += BLOCK_SIZE)
     {
         Block* b = cwdInode->inodeToBlock(offset);
@@ -251,6 +248,7 @@ static int inode_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     }
     log << "readdir successful" << endl;
     log.flush();
+    delete cwdInode;
 	return 0;
 }
 
@@ -259,12 +257,16 @@ static int inode_mkdir(const char *path, mode_t mode)
     log << "mkdir " << path << endl;
     log.flush();
     string fileName = getFileNameFromPath(string(path));
+    string cwdStr = getParentPath(string(path));
+    int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    Inode* cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     log << "filename = " << fileName << endl;
     log << "inode Block num = " << cwdInode->getBlockNum() << "   " << *superBlock->inodeBeginBlock << endl;
     log.flush();
 	cwdInode->createInode(fileName, superBlock, inodeBitmap, dataBitmap, directory);
     log << "mkdirdir successful" << endl;
     log.flush();
+    delete cwdInode;
 	return 0;
 }
 
@@ -273,25 +275,24 @@ static int inode_rmdir(const char *path)
     log << "rmdir " << path << endl;
     log.flush();
     string fileName = getFileNameFromPath(string(path));
-    string pathStr = string(path);
-    int pos = pathStr.rfind("/");
-    string parentPath = pathStr.substr(0, pos);
-    if (pos == 0)
-        parentPath = "/";
-    log << "fileName = " << fileName << "parentPath = " << parentPath << endl;
+    string cwdStr = getParentPath(string(path));
+    log << "fileName = " << fileName << "parentPath = " << cwdStr << endl;
     log.flush();
-    deletecwd();
-    cwdStr = parentPath;
     int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
-    cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    Inode* cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     cwdInode->deleteInode(fileName, superBlock, inodeBitmap, dataBitmap);
+    delete cwdInode;
 	return 0;
 }
 
 static int inode_unlink(const char *path)
 {
 	string fileName = getFileNameFromPath(string(path));
+    string cwdStr = getParentPath(string(path));
+    int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    Inode* cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     cwdInode->deleteInode(fileName, superBlock, inodeBitmap, dataBitmap);
+    delete cwdInode;
 	return 0;
 }
 
@@ -299,16 +300,10 @@ static int inode_getattr(const char *path, struct stat *stbuf)
 {
     Inode* inode = NULL;
     memset(stbuf, 0, sizeof(struct stat));
-    if (string(path) != cwdStr)
-    {   
-        string fileName = getFileNameFromPath(string(path));
-        int inodeNum = cwdInode->nameToInodeNumber(fileName, superBlock, inodeBitmap);
-        if (inodeNum == -1)
-            return -ENOENT;
-        inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
-    }
-    else
-        inode = cwdInode;
+    int inodeNum = Inode::absolutePathToInodeNumber(path, superBlock, inodeBitmap);
+    if (inodeNum == -1)
+        return -ENOENT;
+    inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     stbuf->st_ino = inode->getBlockNum() - *superBlock->inodeBeginBlock;
     // TODO : slink
     if (*inode->type == directory)
@@ -320,9 +315,7 @@ static int inode_getattr(const char *path, struct stat *stbuf)
     stbuf->st_blocks = (*inode->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
     stbuf->st_blksize = BLOCK_SIZE;
 
-    if (string(path) != cwdStr)
-        delete inode;
-
+    delete inode;
 	return 0;
 }
 
@@ -352,11 +345,8 @@ int main(int argc, char *argv[])
 
     createSuperBlockAndBitmaps(superBlock, inodeBitmap, dataBitmap);
     rootInodeNumber = Inode::createRootInode("/", superBlock, inodeBitmap, dataBitmap);
-    cwdStr = "/";
-    cwdInode = new Inode(rootInodeNumber, false);
 	umask(0);
 	int ret = fuse_main(argc, argv, &inode_oper, NULL);
-    deletecwd();
     deleteSuperBlockAndBitmaps(superBlock, inodeBitmap, dataBitmap);
     return ret;
 }
