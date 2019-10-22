@@ -62,54 +62,6 @@ static string getParentPath(const string& pathStr)
     return pathStr.substr(0, pos);
 }
 
-/*
-static int inode_readlink(const char *path, char *buf, size_t size)
-{
-	int res;
-
-	res = readlink(path, buf, size - 1);
-	if (res == -1)
-		return -errno;
-
-	buf[res] = '\0';
-	return 0;
-}
-
-static int inode_symlink(const char *from, const char *to)
-{
-	int res;
-
-	res = symlink(from, to);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
-static int inode_rename(const char *from, const char *to)
-{
-	int res;
-
-	res = rename(from, to);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
-static int inode_link(const char *from, const char *to)
-{
-	int res;
-
-	res = link(from, to);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}*/
-
-
-
 static int inode_opendir(const char* path, struct fuse_file_info *fi)
 {
     log << "opendir " << path << endl;
@@ -156,13 +108,14 @@ static int inode_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
             int blockNum = *((int*)(b->data + i + FILE_NAME_LEN));
             log << "fileName = " << fileName << endl;
             log.flush();
-            Inode* file = new Inode(blockNum, false);
-            // TODO : slink
-            if (*file->type == directory)
+            Inode* newFile = new Inode(blockNum, false);
+            if (*newFile->type == directory)
                 st.st_mode = S_IFDIR | 0666;
-            else
+            else if (*newFile->type == file)
                 st.st_mode = S_IFREG | 0666;
-            delete file;
+            else
+                st.st_mode = S_IFLNK | 0666;
+            delete newFile;
             log << "st_mode = " << st.st_mode << endl;
             log.flush();
             filler(buf, fileName, &st, 0);
@@ -230,11 +183,13 @@ static int inode_getattr(const char *path, struct stat *stbuf)
         return -ENOENT;
     inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     stbuf->st_ino = inode->getBlockNum() - *superBlock->inodeBeginBlock;
-    // TODO : slink
     if (*inode->type == directory)
         stbuf->st_mode = S_IFDIR | 0666;
-    else
+    else if(*inode->type == file)
         stbuf->st_mode = S_IFREG | 0666;
+    else
+        stbuf->st_mode = S_IFLNK | 0666;
+    
     stbuf->st_nlink = *inode->refcnt;
     stbuf->st_size = *inode->size;
     stbuf->st_blocks = (*inode->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -307,7 +262,7 @@ static int inode_read(const char *path, char *buf, size_t size, off_t offset,
     Inode* inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     if (*inode->type != file)
     {
-        log << "truncate type != file" << endl;
+        log << "read type != file" << endl;
         log.flush();
         assert(0);
     }
@@ -351,7 +306,7 @@ static int inode_write(const char *path, const char *buf, size_t size,
     Inode* inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
     if (*inode->type != file)
     {
-        log << "truncate type != file" << endl;
+        log << "write type != file" << endl;
         log.flush();
         assert(0);
     }
@@ -386,15 +341,90 @@ static int inode_write(const char *path, const char *buf, size_t size,
     return writeBytes;
 }
 
+static int inode_link(const char *from, const char *to)
+{
+	log << "link " << from << "  " << to << endl;
+    log.flush();
+    Inode::link(string(from + 1), string(to + 1), 0, superBlock, inodeBitmap, dataBitmap);
+	return 0;
+}
+
+
+static int inode_rename(const char *from, const char *to)
+{
+    log << "rename" << from << "  " << to << endl;
+    log.flush();
+	string fileName = getFileNameFromPath(string(from));
+    string cwdStr = getParentPath(string(from));
+    int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    Inode* cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    int offset = -1;
+    int oldInodeNum = cwdInode->nameToInodeNumber(fileName, superBlock, inodeBitmap, &offset);
+    Block* b = cwdInode->inodeToBlock(offset);
+    memset(b->data + (offset % BLOCK_SIZE), 0, 16);
+    b->setChanged();
+    delete b;
+    delete cwdInode;
+    Inode* oldInode = Inode::inodeNumberToInode(oldInodeNum, superBlock, inodeBitmap);
+    InodeType oldInodeType = *oldInode->type;
+    delete oldInode;
+
+    fileName = getFileNameFromPath(string(to));
+    cwdStr = getParentPath(string(to));
+    inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    cwdInode->createInode(fileName, superBlock, inodeBitmap, dataBitmap, oldInodeType, oldInodeNum);
+    delete cwdInode;
+	return 0;
+}
+
+static int inode_readlink(const char *path, char *buf, size_t size)
+{
+    int inodeNum = Inode::absolutePathToInodeNumber(string(path), superBlock, inodeBitmap);
+    if (inodeNum == -1)
+    {
+        log << "File " << path << " not found." << endl;
+        log.flush();
+        return -ENOENT;
+    }
+    Inode* inode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    if (*inode->type != slink)
+    {
+        log << "readlink type != symlink" << endl;
+        log.flush();
+        assert(0);
+    }
+
+    size = *inode->size;
+    Block* b = inode->inodeToBlock(0);
+    memcpy(buf, b->data, size);
+    delete b;
+	delete inode;
+
+	buf[size] = '\0';
+	return 0;
+}
+
+static int inode_symlink(const char *from, const char *to)
+{
+	log << "symlink " << from << "  " << to << endl;
+    log.flush();
+	string fileName = getFileNameFromPath(string(to));
+    string cwdStr = getParentPath(string(to));
+    int inodeNum = Inode::absolutePathToInodeNumber(cwdStr, superBlock, inodeBitmap);
+    Inode* cwdInode = Inode::inodeNumberToInode(inodeNum, superBlock, inodeBitmap);
+    int newBlockNum = cwdInode->createInode(fileName, superBlock, inodeBitmap, dataBitmap, slink);
+    Inode* newInode = Inode::inodeNumberToInode(newBlockNum - *superBlock->inodeBeginBlock, superBlock, inodeBitmap);
+    newInode->append(from, strlen(from), superBlock, dataBitmap);
+    delete newInode;
+    delete cwdInode;
+	return 0;
+}
+
 static struct fuse_operations inode_oper; 
 
 int main(int argc, char *argv[])
 {
-	/*
-	inode_oper.readlink	= inode_readlink;
-	inode_oper.symlink	= inode_symlink;
-	inode_oper.rename		= inode_rename;
-	inode_oper.link		= inode_link;*/
     inode_oper.getattr	= inode_getattr;
     inode_oper.opendir = inode_opendir;
     inode_oper.readdir = inode_readdir;
@@ -407,6 +437,10 @@ int main(int argc, char *argv[])
     inode_oper.truncate = inode_truncate;
     inode_oper.read = inode_read;
     inode_oper.write = inode_write;
+    inode_oper.rename = inode_rename;
+	inode_oper.link = inode_link;
+    inode_oper.readlink	= inode_readlink;
+	inode_oper.symlink	= inode_symlink;
 
     log.open("inode_fuse.log");
 

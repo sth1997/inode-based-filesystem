@@ -8,7 +8,8 @@
 enum InodeType
 {
     file,
-    directory
+    directory,
+    slink
 };
 
 class Inode: public Block
@@ -23,7 +24,7 @@ private:
 public:
     int* const blockNumberList;
     int* const size;
-    int* const type;
+    InodeType* const type;
     int* const refcnt;
     int* const singleIndirectBlockNumber;
     const int maxDirectBlockNumber;

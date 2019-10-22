@@ -6,7 +6,7 @@
 
 Inode::Inode(int _blockNumber, bool _create, InodeType _type):
 Block(_blockNumber, _create), blockNumberList((int*) &data[16]),
-size((int*) &data[0]), type((int*) &data[4]), refcnt((int*) &data[8]),
+size((int*) &data[0]), type((InodeType*) &data[4]), refcnt((int*) &data[8]),
 singleIndirectBlockNumber((int*) &data[12]), maxDirectBlockNumber(BLOCK_SIZE / 4 - 4)
 {
     indirectBlock = NULL;
@@ -285,8 +285,9 @@ void Inode::deleteInode(const std::string& fileName, SuperBlock* superBlock, Bit
     int offset = -1;
     int inodeNumber = nameToInodeNumber(fileName, superBlock, inodeBitmap, &offset);
     Inode* inode = inodeNumberToInode(inodeNumber, superBlock, inodeBitmap);
-    inode->truncate(0, superBlock, dataBitmap);
     (*inode->refcnt)--;
+    if (*inode->refcnt == 0)
+        inode->truncate(0, superBlock, dataBitmap);
     inode->setChanged();
     Block* b = inodeToBlock(offset);
     memset(b->data + (offset % BLOCK_SIZE), 0, 16);
